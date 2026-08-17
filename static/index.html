@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OrderDesk — STS Valves · PO to Production Checklist</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#F3F6F7; --panel:#FFFFFF; --ink:#16262E; --ink-soft:#5A6E77;
+  --line:#DCE4E7; --line-soft:#EAF0F2;
+  --blue:#0B6E99; --deep:#094D6B; --teal:#0FA3A8;
+  --amber:#E8A13D; --amber-bg:#FDF6E8; --green:#2E9E6B; --red:#D25B4A;
+  --mono:'IBM Plex Mono',monospace; --disp:'Space Grotesk',sans-serif; --body:'Inter',sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{font-family:var(--body);background:var(--paper);color:var(--ink);font-size:14px;line-height:1.45}
+button{font-family:inherit;cursor:pointer}
+input,textarea,select{font-family:inherit;font-size:inherit;color:inherit}
+
+/* ---------- top bar ---------- */
+.topbar{display:flex;align-items:center;gap:14px;padding:10px 18px;background:var(--panel);
+  border-bottom:1px solid var(--line);position:sticky;top:0;z-index:40}
+.mark{display:flex;align-items:center;gap:10px}
+.mark .drop{width:30px;height:30px;border-radius:8px 8px 8px 2px;background:linear-gradient(135deg,var(--teal),var(--blue));
+  display:grid;place-items:center;color:#fff;font-family:var(--disp);font-weight:700;font-size:15px}
+.mark h1{font-family:var(--disp);font-size:17px;font-weight:700;letter-spacing:-.01em}
+.mark h1 span{color:var(--blue)}
+.mark .sub{font-size:11px;color:var(--ink-soft);letter-spacing:.06em;text-transform:uppercase}
+.topbar .spacer{flex:1}
+.btn{border:1px solid var(--line);background:var(--panel);border-radius:8px;padding:8px 14px;
+  font-weight:600;font-size:13px;color:var(--ink);transition:.15s}
+.btn:hover{border-color:var(--blue);color:var(--blue)}
+.btn.primary{background:var(--blue);border-color:var(--blue);color:#fff}
+.btn.primary:hover{background:var(--deep)}
+.btn.ghost-red:hover{border-color:var(--red);color:var(--red)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn:focus-visible,.chip:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+
+/* ---------- layout ---------- */
+.wrap{display:grid;grid-template-columns:330px 1fr 252px;gap:16px;padding:16px 18px;max-width:1600px;margin:0 auto}
+@media(max-width:1180px){.wrap{grid-template-columns:300px 1fr}.rail{grid-column:1/-1;order:3}}
+@media(max-width:860px){.wrap{grid-template-columns:1fr}.rail{order:3}}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:12px}
+.panel h2{font-family:var(--disp);font-size:13px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--ink-soft);padding:12px 14px;border-bottom:1px solid var(--line-soft)}
+
+/* ---------- intake ---------- */
+.intake .inner{padding:14px}
+.dropzone{border:1.5px dashed var(--line);border-radius:10px;padding:22px 14px;text-align:center;
+  color:var(--ink-soft);transition:.15s;background:var(--paper)}
+.dropzone.on{border-color:var(--blue);background:#EAF4F9;color:var(--blue)}
+.dropzone strong{color:var(--ink);display:block;font-weight:600;margin-bottom:3px}
+.dropzone .hint{font-size:12px}
+.or{display:flex;align-items:center;gap:10px;color:var(--ink-soft);font-size:11px;margin:12px 0;
+  text-transform:uppercase;letter-spacing:.08em}
+.or::before,.or::after{content:'';flex:1;height:1px;background:var(--line)}
+textarea.paste{width:100%;min-height:96px;border:1px solid var(--line);border-radius:10px;padding:10px;
+  resize:vertical;font-size:13px;background:var(--paper)}
+textarea.paste:focus{outline:2px solid var(--blue);outline-offset:-1px}
+.extract-row{display:flex;gap:8px;margin-top:10px}
+.extract-row .btn{flex:1}
+.samples{margin-top:14px}
+.samples .lbl{font-size:11px;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.07em;margin-bottom:7px}
+.chip{display:block;width:100%;text-align:left;border:1px solid var(--line);background:var(--panel);
+  border-radius:9px;padding:8px 11px;margin-bottom:6px;font-size:12.5px;transition:.15s}
+.chip:hover{border-color:var(--teal);background:#F2FAFA}
+.chip b{display:block;font-weight:600}
+.chip span{color:var(--ink-soft);font-size:11.5px}
+.status-msg{margin-top:10px;font-size:12.5px;border-radius:8px;padding:9px 11px;display:none}
+.status-msg.show{display:block}
+.status-msg.work{background:#EAF4F9;color:var(--deep)}
+.status-msg.err{background:#FBEDEA;color:var(--red)}
+.status-msg.ok{background:#EAF6F0;color:#1F7A50}
+.spinner{display:inline-block;width:11px;height:11px;border:2px solid #9CC4D6;border-top-color:var(--deep);
+  border-radius:50%;margin-right:6px;vertical-align:-1px;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+@media(prefers-reduced-motion:reduce){.spinner{animation:none}}
+
+/* ---------- checklist ---------- */
+.main .toolbar{display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--line-soft);flex-wrap:wrap}
+.seg{display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.seg button{border:0;background:var(--panel);padding:7px 13px;font-size:12.5px;font-weight:600;color:var(--ink-soft)}
+.seg button.on{background:var(--deep);color:#fff}
+.toolbar .count{font-size:12px;color:var(--ink-soft)}
+.toolbar .spacer{flex:1}
+.tbl-wrap{overflow-x:auto}
+table{border-collapse:collapse;width:100%;min-width:980px}
+th{font-family:var(--disp);font-size:10.5px;letter-spacing:.07em;text-transform:uppercase;color:var(--ink-soft);
+  text-align:left;padding:9px 10px;border-bottom:1px solid var(--line);background:#FAFCFC;position:sticky;top:0}
+td{padding:7px 10px;border-bottom:1px solid var(--line-soft);vertical-align:middle}
+td.num,th.num{text-align:right;font-family:var(--mono);font-size:12.5px}
+tr:hover td{background:#F7FAFB}
+tr.done td{background:#F1F8F4}
+tr.done .desc{color:var(--ink-soft)}
+.desc{font-weight:500}
+.cat-tag{display:inline-block;font-size:10px;font-weight:600;letter-spacing:.04em;border-radius:5px;
+  padding:1.5px 6px;margin-left:6px;vertical-align:1px}
+.cat-gate{background:#E5F0F7;color:var(--deep)}
+.cat-air{background:#E9F7F5;color:#0B7C74}
+.cat-check{background:#FBF3E4;color:#A06716}
+.cat-other{background:var(--line-soft);color:var(--ink-soft)}
+.conf-dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-left:6px;vertical-align:1px}
+.conf-low{background:var(--red)}
+.conf-medium{background:var(--amber)}
+td input.cell{width:64px;border:1px solid transparent;border-radius:6px;padding:4px 6px;background:transparent;
+  font-family:var(--mono);font-size:12.5px;text-align:right}
+td input.cell:hover{border-color:var(--line)}
+td input.cell:focus{outline:none;border-color:var(--blue);background:#fff}
+td.wt-missing{background:var(--amber-bg)}
+td.wt-missing input.cell{color:#A06716}
+.st{border:1px solid var(--line);border-radius:20px;padding:3px 10px;font-size:11px;font-weight:600;background:#fff;white-space:nowrap}
+.st.s0{color:var(--ink-soft)}
+.st.s1{color:var(--amber);border-color:#F0D6AC;background:#FDF8EE}
+.st.s2{color:var(--green);border-color:#BFE3D0;background:#F1F8F4}
+.rm{border:0;background:none;color:var(--ink-soft);font-size:15px;padding:2px 6px;border-radius:6px;opacity:0;transition:.1s}
+tr:hover .rm{opacity:1}
+.rm:hover{color:var(--red);background:#FBEDEA}
+.foot{padding:10px 14px;font-size:12px;color:var(--ink-soft);display:flex;gap:18px;flex-wrap:wrap}
+.foot b{color:var(--ink);font-family:var(--mono)}
+.nolines{padding:40px 20px;text-align:center;color:var(--ink-soft)}
+.nolines b{display:block;font-family:var(--disp);font-size:15px;color:var(--ink);margin-bottom:5px}
+
+/* ---------- manifest rail ---------- */
+.rail .scale{margin:14px;border-radius:10px;background:var(--ink);color:#B8D9E8;padding:14px 14px 12px;
+  box-shadow:inset 0 0 0 1px #24404D}
+.rail .scale .lbl{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:#6E93A3}
+.rail .scale .kg{font-family:var(--mono);font-weight:600;font-size:30px;color:#E9F6FB;letter-spacing:.01em;line-height:1.15}
+.rail .scale .kg span{font-size:14px;color:#6E93A3;font-weight:400}
+.rail .scale .sub{font-family:var(--mono);font-size:11px;color:#7FA6B5;margin-top:2px}
+.rail .scale .sub.warn{color:#F2C879}
+.rail .stat{display:flex;justify-content:space-between;align-items:baseline;padding:8px 16px;font-size:12.5px;color:var(--ink-soft)}
+.rail .stat b{font-family:var(--mono);font-size:13px;color:var(--ink);font-weight:600}
+.rail .stat.grand b{color:var(--deep);font-size:14px}
+.rail hr{border:0;border-top:1px solid var(--line-soft);margin:4px 16px}
+.rail .bar{margin:4px 16px 14px;height:7px;border-radius:5px;background:var(--line-soft);overflow:hidden}
+.rail .bar i{display:block;height:100%;width:0%;background:linear-gradient(90deg,var(--teal),var(--green));transition:width .35s}
+.rail .note{margin:0 16px 14px;font-size:11px;color:var(--ink-soft);line-height:1.5}
+
+/* ---------- review modal ---------- */
+.overlay{position:fixed;inset:0;background:rgba(15,30,38,.45);display:none;z-index:60;
+  align-items:flex-start;justify-content:center;padding:4vh 16px;overflow:auto}
+.overlay.show{display:flex}
+.modal{background:var(--panel);border-radius:14px;max-width:960px;width:100%;
+  box-shadow:0 24px 60px rgba(9,40,55,.35)}
+.modal header{display:flex;align-items:center;gap:12px;padding:14px 18px;border-bottom:1px solid var(--line-soft)}
+.modal header h3{font-family:var(--disp);font-size:16px;font-weight:700}
+.badge{font-size:11px;font-weight:600;border-radius:6px;padding:3px 8px;letter-spacing:.03em}
+.badge.ok{background:#EAF6F0;color:#1F7A50}
+.badge.warn{background:var(--amber-bg);color:#A06716}
+.badge.neutral{background:var(--line-soft);color:var(--ink-soft)}
+.modal .hgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:2px 18px;
+  padding:12px 18px;border-bottom:1px solid var(--line-soft)}
+.modal .hgrid div{font-size:12.5px;padding:3px 0}
+.modal .hgrid .k{color:var(--ink-soft);font-size:10.5px;text-transform:uppercase;letter-spacing:.06em}
+.checks{padding:10px 18px;border-bottom:1px solid var(--line-soft)}
+.checks .c{display:flex;gap:8px;font-size:12.5px;padding:3px 0;align-items:baseline}
+.checks .ic{font-family:var(--mono);font-weight:600;width:16px;flex:none}
+.checks .ok .ic{color:var(--green)}
+.checks .warn .ic{color:var(--amber)}
+.checks .info .ic{color:var(--ink-soft)}
+.checks .warn{color:#7A5410}
+.modal .tblbox{max-height:38vh;overflow:auto;border-bottom:1px solid var(--line-soft)}
+.modal table{min-width:760px}
+.modal tr.low td{background:#FDF1EF}
+.modal tr.medium td{background:var(--amber-bg)}
+.modal .linenote{font-size:11px;color:var(--red)}
+.modal footer{display:flex;gap:10px;padding:14px 18px;align-items:center}
+.modal footer .hintx{font-size:12px;color:var(--ink-soft);flex:1}
+
+@media print{
+  .topbar,.intake,.rail,.toolbar,.rm,.status-msg,.overlay{display:none!important}
+  .wrap{display:block;padding:0}
+  .panel{border:0}
+  body{background:#fff}
+}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="mark">
+    <div class="drop">S</div>
+    <div>
+      <h1>Order<span>Desk</span></h1>
+      <div class="sub">STS Valves · PO → Production Checklist</div>
+    </div>
+  </div>
+  <div class="spacer"></div>
+  <button class="btn" id="printBtn" title="Print the current checklist">Print</button>
+  <button class="btn primary" id="xlsxBtn">Export Excel</button>
+</header>
+
+<div class="wrap">
+
+  <!-- ============ INTAKE ============ -->
+  <section class="panel intake">
+    <h2>1 · Intake purchase order</h2>
+    <div class="inner">
+      <div class="dropzone" id="dz" tabindex="0" role="button" aria-label="Upload purchase order file">
+        <strong>Drop a PO here</strong>
+        <div class="hint">PDF, scan / photo (JPG, PNG, WEBP) or .txt — or click to browse</div>
+        <input type="file" id="fileIn" accept=".pdf,.png,.jpg,.jpeg,.webp,.txt" multiple hidden>
+      </div>
+      <div class="or">or paste order text</div>
+      <textarea class="paste" id="pasteIn" placeholder="Paste PO lines, e-mail text or WhatsApp order here…&#10;e.g. 100MM Dia. DI RESILENT SEATED GATE VALVE, PN 16 — 150 nos @ 5,856.00"></textarea>
+      <div class="extract-row">
+        <button class="btn primary" id="extractBtn">Read order with AI</button>
+      </div>
+      <div class="status-msg" id="msg" role="status" aria-live="polite"></div>
+
+      <div class="samples">
+        <div class="lbl">Try with a real STS order</div>
+        <button class="chip" data-sample="ufe1"><b>Utkal Foundry — 001/UFE/2026-27</b><span>16 lines · gate, air &amp; NRV · ₹64.77 L</span></button>
+        <button class="chip" data-sample="ufe2"><b>Utkal Foundry — 002/UFE/2026-27</b><span>6 lines · gate &amp; air valves · ₹4.22 L</span></button>
+        <button class="chip" data-sample="upfp"><b>Utkal Pipes &amp; Pumps — 005/UP/2026-27</b><span>10 lines · gate, air &amp; NRV · ₹26.70 L</span></button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ CHECKLIST ============ -->
+  <section class="panel main">
+    <h2>2 · Production checklist</h2>
+    <div class="toolbar">
+      <div class="seg" role="tablist">
+        <button id="viewLines" class="on" role="tab">Order lines</button>
+        <button id="viewPlan" role="tab">Production plan</button>
+      </div>
+      <span class="count" id="lineCount">0 lines</span>
+      <div class="spacer"></div>
+      <button class="btn ghost-red" id="clearBtn">Clear all</button>
+    </div>
+    <div class="tbl-wrap"><table id="tbl">
+      <thead></thead><tbody></tbody>
+    </table>
+    <div class="nolines" id="nolines">
+      <b>No order lines yet</b>
+      Load a sample PO on the left, or drop a scanned purchase order and let AI read it.<br>
+      Every AI-read order is shown for review — with arithmetic cross-checks — before it enters this checklist.
+    </div>
+    </div>
+    <div class="foot" id="foot"></div>
+  </section>
+
+  <!-- ============ MANIFEST RAIL ============ -->
+  <aside class="panel rail">
+    <h2>Dispatch manifest</h2>
+    <div class="scale">
+      <div class="lbl">Estimated load</div>
+      <div class="kg" id="kgTotal">0.0 <span>kg</span></div>
+      <div class="sub" id="kgSub">catalogue weights · DN-wise</div>
+    </div>
+    <div class="stat"><span>Order lines</span><b id="stLines">0</b></div>
+    <div class="stat"><span>Total pieces</span><b id="stQty">0</b></div>
+    <hr>
+    <div class="stat"><span>Basic value</span><b id="stVal">—</b></div>
+    <div class="stat"><span>GST</span><b id="stTax">—</b></div>
+    <div class="stat grand"><span>Grand total</span><b id="stGrand">—</b></div>
+    <hr>
+    <div class="stat"><span>Packed weight</span><b id="stPacked">0 kg</b></div>
+    <div class="bar"><i id="packBar"></i></div>
+    <div class="note">Weights come from the STS catalogue tables (gate, air &amp; check valves). Lines without a catalogue weight are highlighted — type the weight in and the manifest updates. Freight partners like VRL bill by chargeable weight.</div>
+  </aside>
+</div>
+
+<!-- ============ REVIEW MODAL ============ -->
+<div class="overlay" id="overlay" role="dialog" aria-modal="true" aria-labelledby="rvTitle">
+  <div class="modal">
+    <header>
+      <h3 id="rvTitle">Review extracted order</h3>
+      <span class="badge" id="rvBadge">—</span>
+      <span class="badge neutral" id="rvMeta"></span>
+    </header>
+    <div class="hgrid" id="rvHead"></div>
+    <div class="checks" id="rvChecks"></div>
+    <div class="tblbox"><table id="rvTbl"><thead>
+      <tr><th>#</th><th>Description</th><th class="num">DN</th><th class="num">PN</th>
+      <th class="num">Qty</th><th class="num">Rate ₹</th><th class="num">Amount ₹</th>
+      <th class="num">GST %</th><th>Read</th></tr></thead><tbody></tbody></table></div>
+    <footer>
+      <span class="hintx" id="rvHint">Check the highlighted lines against the original document, then add.</span>
+      <button class="btn" id="rvDiscard">Discard</button>
+      <button class="btn primary" id="rvAdd">Add to checklist</button>
+    </footer>
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
